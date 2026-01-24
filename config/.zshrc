@@ -43,6 +43,7 @@ export FZF_CTRL_T_OPTS="--preview 'bat --color=always --style=numbers --line-ran
 # ============================================================================
 # Zoxide (smart cd)
 # ============================================================================
+export _ZO_DOCTOR=0  # Disable zoxide doctor warnings
 eval "$(zoxide init zsh)"
 
 # ============================================================================

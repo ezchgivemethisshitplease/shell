@@ -40,7 +40,7 @@ The installer auto-detects your OS and uses the appropriate package manager.
 
 ```bash
 # Clone this repository
-git clone <your-repo-url> ~/dotfiles
+git clone https://github.com/ezchgivemethisshitplease/shell.git ~/dotfiles
 cd ~/dotfiles
 
 # Run installation
