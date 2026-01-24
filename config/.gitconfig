@@ -1,0 +1,15 @@
+# This is Git's per-user configuration file.
+[user]
+	name = maksimkfive
+	email = maksimk5@protonmail.com
+# Please adapt and uncomment the following lines:
+#	name = shitslayer
+#	email = shitslayer666@shitslayer.local
+[core]
+	pager = delta
+[interactive]
+	diffFilter = delta --color-only
+[delta]
+	navigate = true
+	side-by-side = true
+	line-numbers = true
