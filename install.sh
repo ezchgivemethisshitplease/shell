@@ -88,7 +88,7 @@ install_packages() {
             source "$HOME/.cargo/env"
         fi
 
-        cargo install zoxide eza bat-cat ripgrep btop
+        cargo install zoxide eza bat ripgrep btop
 
         # git-delta
         if ! command -v delta &> /dev/null; then
