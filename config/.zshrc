@@ -43,15 +43,14 @@ export FZF_CTRL_T_OPTS="--preview 'bat --color=always --style=numbers --line-ran
 # ============================================================================
 # Zoxide (smart cd)
 # ============================================================================
-export _ZO_DOCTOR=0  # Disable zoxide doctor warnings
 eval "$(zoxide init zsh)"
 
 # ============================================================================
 # Aliases
 # ============================================================================
 
-# Modern replacements
-alias ls='eza --icons --group-directories-first'
+# Modern replacements (keep original commands available)
+alias l='eza --icons --group-directories-first'
 alias ll='eza -lah --icons --group-directories-first --git'
 alias lt='eza --tree --level=2 --icons'
 alias cat='bat --paging=never'
@@ -138,11 +137,11 @@ zstyle ':fzf-tab:*' switch-group ',' '.'
 [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
 
 # ============================================================================
-# Welcome message (not in tmux or SSH)
+# Welcome message - DISABLED (use 'ref' and 'tmuxref' instead)
 # ============================================================================
-if [[ -z "$TMUX" ]] && [[ -z "$SSH_CONNECTION" ]]; then
-  ~/.welcome.sh
-fi
+# if [[ -z "$TMUX" ]] && [[ -z "$SSH_CONNECTION" ]]; then
+#   ~/.welcome.sh
+# fi
 
 # ============================================================================
 # SDKMAN
@@ -154,3 +153,7 @@ export SDKMAN_DIR="$HOME/.sdkman"
 # Custom PATH
 # ============================================================================
 export PATH="$HOME/assreaper/hashcat:$PATH"
+export PATH="$HOME/.local/bin:$PATH"
+
+# opencode
+export PATH=/Users/shitslayer/.opencode/bin:$PATH

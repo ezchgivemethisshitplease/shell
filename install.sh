@@ -9,6 +9,9 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Flags
+FORCE_MODE=false
+
 # Helper functions
 print_info() {
     echo -e "${BLUE}[INFO]${NC} $1"
@@ -26,17 +29,46 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# Parse arguments
+parse_args() {
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --force|-f)
+                FORCE_MODE=true
+                print_warning "Force mode enabled: will overwrite existing configs without backup"
+                shift
+                ;;
+            --help|-h)
+                echo "Usage: $0 [OPTIONS]"
+                echo ""
+                echo "Options:"
+                echo "  -f, --force    Force mode: overwrite configs without backup"
+                echo "  -h, --help     Show this help message"
+                exit 0
+                ;;
+            *)
+                print_error "Unknown option: $1"
+                echo "Use --help for usage information"
+                exit 1
+                ;;
+        esac
+    done
+}
+
 # Detect OS
 detect_os() {
     if [[ "$OSTYPE" == "darwin"* ]]; then
         OS="macos"
-        print_info "Detected macOS"
+        ARCH=$(uname -m)
+        print_info "Detected macOS ($ARCH)"
     elif [[ -f /etc/debian_version ]]; then
         OS="debian"
-        print_info "Detected Debian/Ubuntu"
+        ARCH=$(dpkg --print-architecture)
+        print_info "Detected Debian/Ubuntu ($ARCH)"
     elif [[ -f /etc/arch-release ]]; then
         OS="arch"
-        print_info "Detected Arch Linux"
+        ARCH=$(uname -m)
+        print_info "Detected Arch Linux ($ARCH)"
     else
         print_error "Unsupported OS. Supported: macOS, Debian/Ubuntu, Arch Linux"
         exit 1
@@ -51,7 +83,7 @@ setup_package_manager() {
             /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
             # Add Homebrew to PATH for Apple Silicon
-            if [[ $(uname -m) == "arm64" ]]; then
+            if [[ "$ARCH" == "arm64" ]]; then
                 echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
                 eval "$(/opt/homebrew/bin/brew shellenv)"
             fi
@@ -74,7 +106,7 @@ install_packages() {
 
     elif [[ "$OS" == "debian" ]]; then
         sudo apt update
-        sudo apt install -y zsh vim tmux git curl wget build-essential
+        sudo apt install -y zsh vim tmux git curl wget unzip
 
         # Install fzf
         if [[ ! -d ~/.fzf ]]; then
@@ -82,20 +114,67 @@ install_packages() {
             ~/.fzf/install --key-bindings --completion --no-update-rc --no-bash --no-fish
         fi
 
-        # Install modern tools via cargo/download
-        if ! command -v cargo &> /dev/null; then
-            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-            source "$HOME/.cargo/env"
+        # Install zoxide (pre-built binary)
+        if ! command -v zoxide &> /dev/null; then
+            print_info "Installing zoxide..."
+            ZOXIDE_VERSION=$(curl -s "https://api.github.com/repos/ajeetdsouza/zoxide/releases/latest" | grep -Po '"tag_name": "v\K[^"]*')
+            curl -sS "https://github.com/ajeetdsouza/zoxide/releases/latest/download/zoxide-${ZOXIDE_VERSION}-${ARCH}-unknown-linux-musl.tar.gz" | sudo tar xz -C /usr/local/bin zoxide
+            sudo chmod +x /usr/local/bin/zoxide
         fi
 
-        cargo install zoxide eza bat ripgrep btop
+        # Install eza (pre-built binary)
+        if ! command -v eza &> /dev/null; then
+            print_info "Installing eza..."
+            EZA_VERSION=$(curl -s "https://api.github.com/repos/eza-community/eza/releases/latest" | grep -Po '"tag_name": "v\K[^"]*')
+            curl -Lo /tmp/eza.tar.gz "https://github.com/eza-community/eza/releases/download/v${EZA_VERSION}/eza_${ARCH}-unknown-linux-gnu.tar.gz"
+            sudo tar xzf /tmp/eza.tar.gz -C /usr/local/bin
+            sudo chmod +x /usr/local/bin/eza
+            rm /tmp/eza.tar.gz
+        fi
 
-        # git-delta
+        # Install bat (pre-built deb)
+        if ! command -v bat &> /dev/null; then
+            print_info "Installing bat..."
+            BAT_VERSION=$(curl -s "https://api.github.com/repos/sharkdp/bat/releases/latest" | grep -Po '"tag_name": "v\K[^"]*')
+            curl -Lo /tmp/bat.deb "https://github.com/sharkdp/bat/releases/download/v${BAT_VERSION}/bat_${BAT_VERSION}_${ARCH}.deb"
+            sudo dpkg -i /tmp/bat.deb
+            rm /tmp/bat.deb
+        fi
+
+        # Install ripgrep (pre-built deb)
+        if ! command -v rg &> /dev/null; then
+            print_info "Installing ripgrep..."
+            RG_VERSION=$(curl -s "https://api.github.com/repos/BurntSushi/ripgrep/releases/latest" | grep -Po '"tag_name": "\K[^"]*')
+            curl -Lo /tmp/ripgrep.deb "https://github.com/BurntSushi/ripgrep/releases/download/${RG_VERSION}/ripgrep_${RG_VERSION}-1_${ARCH}.deb"
+            sudo dpkg -i /tmp/ripgrep.deb
+            rm /tmp/ripgrep.deb
+        fi
+
+        # Install delta (pre-built deb)
         if ! command -v delta &> /dev/null; then
+            print_info "Installing git-delta..."
             DELTA_VERSION=$(curl -s "https://api.github.com/repos/dandavison/delta/releases/latest" | grep -Po '"tag_name": "\K[^"]*')
-            curl -Lo /tmp/delta.deb "https://github.com/dandavison/delta/releases/download/${DELTA_VERSION}/git-delta_${DELTA_VERSION}_amd64.deb"
+            curl -Lo /tmp/delta.deb "https://github.com/dandavison/delta/releases/download/${DELTA_VERSION}/git-delta_${DELTA_VERSION}_${ARCH}.deb"
             sudo dpkg -i /tmp/delta.deb
             rm /tmp/delta.deb
+        fi
+
+        # Install btop (pre-built binary)
+        if ! command -v btop &> /dev/null; then
+            print_info "Installing btop..."
+            BTOP_VERSION=$(curl -s "https://api.github.com/repos/aristocratos/btop/releases/latest" | grep -Po '"tag_name": "v\K[^"]*')
+            # Determine correct arch name for btop
+            if [[ "$ARCH" == "amd64" ]]; then
+                BTOP_ARCH="x86_64"
+            elif [[ "$ARCH" == "arm64" ]]; then
+                BTOP_ARCH="aarch64"
+            else
+                BTOP_ARCH="$ARCH"
+            fi
+            curl -Lo /tmp/btop.tbz "https://github.com/aristocratos/btop/releases/download/v${BTOP_VERSION}/btop-${BTOP_ARCH}-linux-musl.tbz"
+            sudo tar xjf /tmp/btop.tbz -C /tmp
+            sudo mv /tmp/btop/bin/btop /usr/local/bin/
+            rm -rf /tmp/btop /tmp/btop.tbz
         fi
 
     elif [[ "$OS" == "arch" ]]; then
@@ -114,10 +193,22 @@ install_packages() {
 install_oh_my_zsh() {
     if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
         print_info "Installing Oh My Zsh..."
+        
+        if [[ "$FORCE_MODE" == true ]]; then
+            # Force mode: remove existing zsh config
+            rm -rf "$HOME/.zshrc" "$HOME/.zsh_history" 2>/dev/null || true
+        fi
+        
         RUNZSH=no KEEP_ZSHRC=yes sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
         print_success "Oh My Zsh installed"
     else
         print_info "Oh My Zsh already installed"
+        
+        if [[ "$FORCE_MODE" == true ]]; then
+            print_warning "Force mode: cleaning Oh My Zsh custom plugins/themes"
+            rm -rf "$HOME/.oh-my-zsh/custom/plugins/"* 2>/dev/null || true
+            rm -rf "$HOME/.oh-my-zsh/custom/themes/"* 2>/dev/null || true
+        fi
     fi
 }
 
@@ -130,6 +221,11 @@ install_powerlevel10k() {
         print_success "Powerlevel10k installed"
     else
         print_info "Powerlevel10k already installed"
+        
+        if [[ "$FORCE_MODE" == true ]]; then
+            print_warning "Force mode: updating Powerlevel10k"
+            git -C "$P10K_DIR" pull
+        fi
     fi
 }
 
@@ -141,24 +237,36 @@ install_zsh_plugins() {
     if [[ ! -d "$CUSTOM_DIR/fzf-tab" ]]; then
         print_info "Installing fzf-tab..."
         git clone https://github.com/Aloxaf/fzf-tab "$CUSTOM_DIR/fzf-tab"
+    elif [[ "$FORCE_MODE" == true ]]; then
+        print_warning "Force mode: updating fzf-tab"
+        git -C "$CUSTOM_DIR/fzf-tab" pull
     fi
 
     # zsh-autosuggestions
     if [[ ! -d "$CUSTOM_DIR/zsh-autosuggestions" ]]; then
         print_info "Installing zsh-autosuggestions..."
         git clone https://github.com/zsh-users/zsh-autosuggestions "$CUSTOM_DIR/zsh-autosuggestions"
+    elif [[ "$FORCE_MODE" == true ]]; then
+        print_warning "Force mode: updating zsh-autosuggestions"
+        git -C "$CUSTOM_DIR/zsh-autosuggestions" pull
     fi
 
     # fast-syntax-highlighting
     if [[ ! -d "$CUSTOM_DIR/fast-syntax-highlighting" ]]; then
         print_info "Installing fast-syntax-highlighting..."
         git clone https://github.com/zdharma-continuum/fast-syntax-highlighting "$CUSTOM_DIR/fast-syntax-highlighting"
+    elif [[ "$FORCE_MODE" == true ]]; then
+        print_warning "Force mode: updating fast-syntax-highlighting"
+        git -C "$CUSTOM_DIR/fast-syntax-highlighting" pull
     fi
 
     # history-substring-search
     if [[ ! -d "$CUSTOM_DIR/history-substring-search" ]]; then
         print_info "Installing history-substring-search..."
         git clone https://github.com/zsh-users/zsh-history-substring-search "$CUSTOM_DIR/history-substring-search"
+    elif [[ "$FORCE_MODE" == true ]]; then
+        print_warning "Force mode: updating history-substring-search"
+        git -C "$CUSTOM_DIR/history-substring-search" pull
     fi
 
     print_success "ZSH plugins installed"
@@ -172,6 +280,11 @@ install_tpm() {
         print_success "TPM installed"
     else
         print_info "TPM already installed"
+        
+        if [[ "$FORCE_MODE" == true ]]; then
+            print_warning "Force mode: updating TPM"
+            git -C "$HOME/.tmux/plugins/tpm" pull
+        fi
     fi
 }
 
@@ -182,26 +295,47 @@ create_symlinks() {
     local DOTFILES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     local CONFIG_DIR="$DOTFILES_DIR/config"
 
-    # Backup existing files
-    local BACKUP_DIR="$HOME/.dotfiles_backup_$(date +%Y%m%d_%H%M%S)"
-    mkdir -p "$BACKUP_DIR"
+    # Backup existing files (unless force mode)
+    if [[ "$FORCE_MODE" == false ]]; then
+        local BACKUP_DIR="$HOME/.dotfiles_backup_$(date +%Y%m%d_%H%M%S)"
+        mkdir -p "$BACKUP_DIR"
+        
+        local files=(".zshrc" ".tmux.conf" ".vimrc" ".gitconfig" ".p10k.zsh" ".aliases.md" ".tmux.md")
+        
+        for file in "${files[@]}"; do
+            if [[ -f "$HOME/$file" ]] && [[ ! -L "$HOME/$file" ]]; then
+                print_warning "Backing up existing $file to $BACKUP_DIR"
+                mv "$HOME/$file" "$BACKUP_DIR/"
+            elif [[ -L "$HOME/$file" ]]; then
+                print_info "Removing existing symlink $file"
+                rm "$HOME/$file"
+            fi
+        done
+        
+        print_success "Backups created in $BACKUP_DIR"
+    else
+        # Force mode: just remove everything
+        print_warning "Force mode: removing existing configs without backup"
+        local files=(".zshrc" ".tmux.conf" ".vimrc" ".gitconfig" ".p10k.zsh" ".aliases.md" ".tmux.md")
+        
+        for file in "${files[@]}"; do
+            rm -f "$HOME/$file"
+        done
+    fi
 
-    local files=(".zshrc" ".tmux.conf" ".vimrc" ".gitconfig" ".p10k.zsh" ".welcome.sh" ".aliases.md" ".tmux.md")
-
+    # Create symlinks
+    local files=(".zshrc" ".tmux.conf" ".vimrc" ".gitconfig" ".p10k.zsh" ".aliases.md" ".tmux.md")
+    
     for file in "${files[@]}"; do
-        if [[ -f "$HOME/$file" ]] && [[ ! -L "$HOME/$file" ]]; then
-            print_warning "Backing up existing $file to $BACKUP_DIR"
-            mv "$HOME/$file" "$BACKUP_DIR/"
-        elif [[ -L "$HOME/$file" ]]; then
-            print_info "Removing existing symlink $file"
-            rm "$HOME/$file"
+        if [[ -f "$CONFIG_DIR/$file" ]]; then
+            print_info "Creating symlink: $file"
+            ln -sf "$CONFIG_DIR/$file" "$HOME/$file"
+        else
+            print_warning "Config file not found, skipping: $file"
         fi
-
-        print_info "Creating symlink: $file"
-        ln -sf "$CONFIG_DIR/$file" "$HOME/$file"
     done
 
-    print_success "Symlinks created (backups in $BACKUP_DIR if any)"
+    print_success "Symlinks created"
 }
 
 # Create necessary directories
@@ -225,7 +359,7 @@ change_shell() {
         local ZSH_PATH=$(which zsh)
 
         # Check if zsh is in /etc/shells
-        if ! grep -q "$ZSH_PATH" /etc/shells; then
+        if ! grep -q "$ZSH_PATH" /etc/shells 2>/dev/null; then
             print_warning "Adding $ZSH_PATH to /etc/shells (requires sudo)"
             echo "$ZSH_PATH" | sudo tee -a /etc/shells
         fi
@@ -245,6 +379,8 @@ install_tmux_plugins() {
 
 # Main installation
 main() {
+    parse_args "$@"
+    
     echo ""
     echo "╔═══════════════════════════════════════════════════════════╗"
     echo "║         Shell Setup Installation Script                  ║"
@@ -255,13 +391,18 @@ main() {
     detect_os
     echo ""
 
-    print_warning "This script will install packages and modify your shell configuration."
-    read -p "Continue? (y/n) " -n 1 -r
-    echo ""
+    if [[ "$FORCE_MODE" == false ]]; then
+        print_warning "This script will install packages and modify your shell configuration."
+        read -p "Continue? (y/n) " -n 1 -r
+        echo ""
 
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        print_error "Installation cancelled"
-        exit 1
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            print_error "Installation cancelled"
+            exit 1
+        fi
+    else
+        print_warning "FORCE MODE ENABLED: will overwrite all configs without confirmation"
+        sleep 2
     fi
 
     echo ""
@@ -290,7 +431,14 @@ main() {
     print_info "2. Open tmux and press Ctrl+A I (capital I) to install tmux plugins"
     print_info "3. Review your configs in ~/dotfiles/config/"
     echo ""
-    print_warning "Note: Some tools may require you to restart your terminal to work properly"
+    print_info "Quick reference commands:"
+    print_info "  ref       - show aliases and shortcuts"
+    print_info "  tmuxref   - show tmux commands"
+    echo ""
+    
+    if [[ "$FORCE_MODE" == false ]]; then
+        print_warning "Note: Your old configs were backed up to ~/.dotfiles_backup_*"
+    fi
     echo ""
 }
 
