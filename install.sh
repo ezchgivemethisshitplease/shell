@@ -223,7 +223,12 @@ install_packages() {
             else
                 BTOP_ARCH="$ARCH"
             fi
-            curl -Lo /tmp/btop.tbz "https://github.com/aristocratos/btop/releases/download/v${BTOP_VERSION}/btop-${BTOP_ARCH}-linux-musl.tbz"
+            curl -Lo /tmp/btop.tbz "https://github.com/aristocratos/btop/releases/download/v${BTOP_VERSION}/btop-${BTOP_ARCH}-unknown-linux-musl.tbz"
+            if ! file /tmp/btop.tbz | grep -q bzip2; then
+                print_error "Downloaded btop file is not a valid bzip2 archive"
+                rm -f /tmp/btop.tbz
+                exit 1
+            fi
             sudo tar xjf /tmp/btop.tbz -C /tmp
             sudo mv /tmp/btop/bin/btop /usr/local/bin/
             rm -rf /tmp/btop /tmp/btop.tbz
