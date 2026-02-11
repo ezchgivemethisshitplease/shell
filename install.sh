@@ -422,8 +422,13 @@ change_shell() {
             echo "$ZSH_PATH" | sudo tee -a /etc/shells
         fi
 
-        chsh -s "$ZSH_PATH"
-        print_success "Default shell changed to zsh (restart terminal to apply)"
+        if chsh -s "$ZSH_PATH" 2>/dev/null; then
+            print_success "Default shell changed to zsh (restart terminal to apply)"
+        else
+            print_warning "chsh failed (no permission). To change shell manually, ask admin to run:"
+            print_warning "  sudo chsh -s $ZSH_PATH $USER"
+            print_warning "Or add 'exec zsh' to the end of your ~/.bashrc"
+        fi
     else
         print_info "Default shell is already zsh"
     fi
