@@ -117,52 +117,104 @@ install_packages() {
         # Install zoxide (pre-built binary)
         if ! command -v zoxide &> /dev/null; then
             print_info "Installing zoxide..."
-            ZOXIDE_VERSION=$(curl -s "https://api.github.com/repos/ajeetdsouza/zoxide/releases/latest" | grep -Po '"tag_name": "v\K[^"]*')
-            curl -sS "https://github.com/ajeetdsouza/zoxide/releases/latest/download/zoxide-${ZOXIDE_VERSION}-${ARCH}-unknown-linux-musl.tar.gz" | sudo tar xz -C /usr/local/bin zoxide
+            ZOXIDE_VERSION=$(curl -sL "https://api.github.com/repos/ajeetdsouza/zoxide/releases/latest" | sed -n 's/.*"tag_name": "v\([^"]*\)".*/\1/p')
+            if [[ -z "$ZOXIDE_VERSION" ]]; then
+                print_error "Failed to get zoxide version from GitHub API"
+                exit 1
+            fi
+            # Map dpkg arch to zoxide arch naming
+            if [[ "$ARCH" == "amd64" ]]; then
+                ZOXIDE_ARCH="x86_64"
+            elif [[ "$ARCH" == "arm64" ]]; then
+                ZOXIDE_ARCH="aarch64"
+            else
+                ZOXIDE_ARCH="$ARCH"
+            fi
+            curl -Lo /tmp/zoxide.tar.gz "https://github.com/ajeetdsouza/zoxide/releases/download/v${ZOXIDE_VERSION}/zoxide-${ZOXIDE_VERSION}-${ZOXIDE_ARCH}-unknown-linux-musl.tar.gz"
+            if ! file /tmp/zoxide.tar.gz | grep -q gzip; then
+                print_error "Downloaded zoxide file is not a valid gzip archive"
+                rm -f /tmp/zoxide.tar.gz
+                exit 1
+            fi
+            sudo tar xzf /tmp/zoxide.tar.gz -C /usr/local/bin zoxide
             sudo chmod +x /usr/local/bin/zoxide
+            rm -f /tmp/zoxide.tar.gz
         fi
 
         # Install eza (pre-built binary)
         if ! command -v eza &> /dev/null; then
             print_info "Installing eza..."
-            EZA_VERSION=$(curl -s "https://api.github.com/repos/eza-community/eza/releases/latest" | grep -Po '"tag_name": "v\K[^"]*')
-            curl -Lo /tmp/eza.tar.gz "https://github.com/eza-community/eza/releases/download/v${EZA_VERSION}/eza_${ARCH}-unknown-linux-gnu.tar.gz"
+            EZA_VERSION=$(curl -sL "https://api.github.com/repos/eza-community/eza/releases/latest" | sed -n 's/.*"tag_name": "v\([^"]*\)".*/\1/p')
+            if [[ -z "$EZA_VERSION" ]]; then
+                print_error "Failed to get eza version from GitHub API"
+                exit 1
+            fi
+            # Map dpkg arch to eza arch naming
+            if [[ "$ARCH" == "amd64" ]]; then
+                EZA_ARCH="x86_64"
+            elif [[ "$ARCH" == "arm64" ]]; then
+                EZA_ARCH="aarch64"
+            else
+                EZA_ARCH="$ARCH"
+            fi
+            curl -Lo /tmp/eza.tar.gz "https://github.com/eza-community/eza/releases/download/v${EZA_VERSION}/eza_${EZA_ARCH}-unknown-linux-gnu.tar.gz"
+            if ! file /tmp/eza.tar.gz | grep -q gzip; then
+                print_error "Downloaded eza file is not a valid gzip archive"
+                rm -f /tmp/eza.tar.gz
+                exit 1
+            fi
             sudo tar xzf /tmp/eza.tar.gz -C /usr/local/bin
             sudo chmod +x /usr/local/bin/eza
-            rm /tmp/eza.tar.gz
+            rm -f /tmp/eza.tar.gz
         fi
 
         # Install bat (pre-built deb)
         if ! command -v bat &> /dev/null; then
             print_info "Installing bat..."
-            BAT_VERSION=$(curl -s "https://api.github.com/repos/sharkdp/bat/releases/latest" | grep -Po '"tag_name": "v\K[^"]*')
+            BAT_VERSION=$(curl -sL "https://api.github.com/repos/sharkdp/bat/releases/latest" | sed -n 's/.*"tag_name": "v\([^"]*\)".*/\1/p')
+            if [[ -z "$BAT_VERSION" ]]; then
+                print_error "Failed to get bat version from GitHub API"
+                exit 1
+            fi
             curl -Lo /tmp/bat.deb "https://github.com/sharkdp/bat/releases/download/v${BAT_VERSION}/bat_${BAT_VERSION}_${ARCH}.deb"
             sudo dpkg -i /tmp/bat.deb
-            rm /tmp/bat.deb
+            rm -f /tmp/bat.deb
         fi
 
         # Install ripgrep (pre-built deb)
         if ! command -v rg &> /dev/null; then
             print_info "Installing ripgrep..."
-            RG_VERSION=$(curl -s "https://api.github.com/repos/BurntSushi/ripgrep/releases/latest" | grep -Po '"tag_name": "\K[^"]*')
+            RG_VERSION=$(curl -sL "https://api.github.com/repos/BurntSushi/ripgrep/releases/latest" | sed -n 's/.*"tag_name": "\([^"]*\)".*/\1/p')
+            if [[ -z "$RG_VERSION" ]]; then
+                print_error "Failed to get ripgrep version from GitHub API"
+                exit 1
+            fi
             curl -Lo /tmp/ripgrep.deb "https://github.com/BurntSushi/ripgrep/releases/download/${RG_VERSION}/ripgrep_${RG_VERSION}-1_${ARCH}.deb"
             sudo dpkg -i /tmp/ripgrep.deb
-            rm /tmp/ripgrep.deb
+            rm -f /tmp/ripgrep.deb
         fi
 
         # Install delta (pre-built deb)
         if ! command -v delta &> /dev/null; then
             print_info "Installing git-delta..."
-            DELTA_VERSION=$(curl -s "https://api.github.com/repos/dandavison/delta/releases/latest" | grep -Po '"tag_name": "\K[^"]*')
+            DELTA_VERSION=$(curl -sL "https://api.github.com/repos/dandavison/delta/releases/latest" | sed -n 's/.*"tag_name": "\([^"]*\)".*/\1/p')
+            if [[ -z "$DELTA_VERSION" ]]; then
+                print_error "Failed to get delta version from GitHub API"
+                exit 1
+            fi
             curl -Lo /tmp/delta.deb "https://github.com/dandavison/delta/releases/download/${DELTA_VERSION}/git-delta_${DELTA_VERSION}_${ARCH}.deb"
             sudo dpkg -i /tmp/delta.deb
-            rm /tmp/delta.deb
+            rm -f /tmp/delta.deb
         fi
 
         # Install btop (pre-built binary)
         if ! command -v btop &> /dev/null; then
             print_info "Installing btop..."
-            BTOP_VERSION=$(curl -s "https://api.github.com/repos/aristocratos/btop/releases/latest" | grep -Po '"tag_name": "v\K[^"]*')
+            BTOP_VERSION=$(curl -sL "https://api.github.com/repos/aristocratos/btop/releases/latest" | sed -n 's/.*"tag_name": "v\([^"]*\)".*/\1/p')
+            if [[ -z "$BTOP_VERSION" ]]; then
+                print_error "Failed to get btop version from GitHub API"
+                exit 1
+            fi
             # Determine correct arch name for btop
             if [[ "$ARCH" == "amd64" ]]; then
                 BTOP_ARCH="x86_64"
