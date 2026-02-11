@@ -229,8 +229,9 @@ install_packages() {
                 rm -f /tmp/btop.tbz
                 exit 1
             fi
-            sudo tar xjf /tmp/btop.tbz -C /tmp
-            sudo mv /tmp/btop/bin/btop /usr/local/bin/
+            tar xjf /tmp/btop.tbz -C /tmp
+            sudo cp /tmp/btop/bin/btop /usr/local/bin/
+            sudo chmod +x /usr/local/bin/btop
             rm -rf /tmp/btop /tmp/btop.tbz
         fi
 
