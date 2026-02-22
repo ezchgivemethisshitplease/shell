@@ -106,7 +106,7 @@ install_packages() {
 
     elif [[ "$OS" == "debian" ]]; then
         sudo apt update
-        sudo apt install -y zsh vim tmux git curl wget unzip
+        sudo apt install -y zsh vim tmux git curl wget unzip bzip2 file
 
         # Install fzf
         if [[ ! -d ~/.fzf ]]; then
