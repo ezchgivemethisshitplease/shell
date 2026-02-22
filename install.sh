@@ -177,11 +177,16 @@ install_packages() {
                 exit 1
             fi
             curl -Lo /tmp/bat.deb "https://github.com/sharkdp/bat/releases/download/v${BAT_VERSION}/bat_${BAT_VERSION}_${ARCH}.deb"
+            if ! file /tmp/bat.deb | grep -q "Debian binary package"; then
+                print_error "Downloaded bat file is not a valid .deb package"
+                rm -f /tmp/bat.deb
+                exit 1
+            fi
             sudo dpkg -i /tmp/bat.deb
             rm -f /tmp/bat.deb
         fi
 
-        # Install ripgrep (pre-built deb)
+        # Install ripgrep (pre-built binary)
         if ! command -v rg &> /dev/null; then
             print_info "Installing ripgrep..."
             RG_VERSION=$(curl -sL "https://api.github.com/repos/BurntSushi/ripgrep/releases/latest" | sed -n 's/.*"tag_name": "\([^"]*\)".*/\1/p')
@@ -189,9 +194,34 @@ install_packages() {
                 print_error "Failed to get ripgrep version from GitHub API"
                 exit 1
             fi
-            curl -Lo /tmp/ripgrep.deb "https://github.com/BurntSushi/ripgrep/releases/download/${RG_VERSION}/ripgrep_${RG_VERSION}-1_${ARCH}.deb"
-            sudo dpkg -i /tmp/ripgrep.deb
-            rm -f /tmp/ripgrep.deb
+            # ripgrep only publishes .deb for amd64, use .tar.gz for other architectures
+            if [[ "$ARCH" == "amd64" ]]; then
+                curl -Lo /tmp/ripgrep.deb "https://github.com/BurntSushi/ripgrep/releases/download/${RG_VERSION}/ripgrep_${RG_VERSION}-1_${ARCH}.deb"
+                if ! file /tmp/ripgrep.deb | grep -q "Debian binary package"; then
+                    print_error "Downloaded ripgrep file is not a valid .deb package"
+                    rm -f /tmp/ripgrep.deb
+                    exit 1
+                fi
+                sudo dpkg -i /tmp/ripgrep.deb
+                rm -f /tmp/ripgrep.deb
+            else
+                # Map dpkg arch to ripgrep arch naming
+                if [[ "$ARCH" == "arm64" ]]; then
+                    RG_ARCH="aarch64"
+                else
+                    RG_ARCH="$ARCH"
+                fi
+                curl -Lo /tmp/ripgrep.tar.gz "https://github.com/BurntSushi/ripgrep/releases/download/${RG_VERSION}/ripgrep-${RG_VERSION}-${RG_ARCH}-unknown-linux-gnu.tar.gz"
+                if ! file /tmp/ripgrep.tar.gz | grep -q gzip; then
+                    print_error "Downloaded ripgrep file is not a valid gzip archive"
+                    rm -f /tmp/ripgrep.tar.gz
+                    exit 1
+                fi
+                tar xzf /tmp/ripgrep.tar.gz -C /tmp
+                sudo cp "/tmp/ripgrep-${RG_VERSION}-${RG_ARCH}-unknown-linux-gnu/rg" /usr/local/bin/
+                sudo chmod +x /usr/local/bin/rg
+                rm -rf "/tmp/ripgrep-${RG_VERSION}-${RG_ARCH}-unknown-linux-gnu" /tmp/ripgrep.tar.gz
+            fi
         fi
 
         # Install delta (pre-built deb)
@@ -203,6 +233,11 @@ install_packages() {
                 exit 1
             fi
             curl -Lo /tmp/delta.deb "https://github.com/dandavison/delta/releases/download/${DELTA_VERSION}/git-delta_${DELTA_VERSION}_${ARCH}.deb"
+            if ! file /tmp/delta.deb | grep -q "Debian binary package"; then
+                print_error "Downloaded delta file is not a valid .deb package"
+                rm -f /tmp/delta.deb
+                exit 1
+            fi
             sudo dpkg -i /tmp/delta.deb
             rm -f /tmp/delta.deb
         fi
@@ -251,17 +286,17 @@ install_packages() {
 install_oh_my_zsh() {
     if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
         print_info "Installing Oh My Zsh..."
-        
+
         if [[ "$FORCE_MODE" == true ]]; then
             # Force mode: remove existing zsh config
             rm -rf "$HOME/.zshrc" "$HOME/.zsh_history" 2>/dev/null || true
         fi
-        
+
         RUNZSH=no KEEP_ZSHRC=yes sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
         print_success "Oh My Zsh installed"
     else
         print_info "Oh My Zsh already installed"
-        
+
         if [[ "$FORCE_MODE" == true ]]; then
             print_warning "Force mode: cleaning Oh My Zsh custom plugins/themes"
             rm -rf "$HOME/.oh-my-zsh/custom/plugins/"* 2>/dev/null || true
@@ -279,7 +314,7 @@ install_powerlevel10k() {
         print_success "Powerlevel10k installed"
     else
         print_info "Powerlevel10k already installed"
-        
+
         if [[ "$FORCE_MODE" == true ]]; then
             print_warning "Force mode: updating Powerlevel10k"
             git -C "$P10K_DIR" pull
@@ -338,7 +373,7 @@ install_tpm() {
         print_success "TPM installed"
     else
         print_info "TPM already installed"
-        
+
         if [[ "$FORCE_MODE" == true ]]; then
             print_warning "Force mode: updating TPM"
             git -C "$HOME/.tmux/plugins/tpm" pull
@@ -357,9 +392,9 @@ create_symlinks() {
     if [[ "$FORCE_MODE" == false ]]; then
         local BACKUP_DIR="$HOME/.dotfiles_backup_$(date +%Y%m%d_%H%M%S)"
         mkdir -p "$BACKUP_DIR"
-        
+
         local files=(".zshrc" ".tmux.conf" ".vimrc" ".gitconfig" ".p10k.zsh" ".aliases.md" ".tmux.md")
-        
+
         for file in "${files[@]}"; do
             if [[ -f "$HOME/$file" ]] && [[ ! -L "$HOME/$file" ]]; then
                 print_warning "Backing up existing $file to $BACKUP_DIR"
@@ -369,13 +404,13 @@ create_symlinks() {
                 rm "$HOME/$file"
             fi
         done
-        
+
         print_success "Backups created in $BACKUP_DIR"
     else
         # Force mode: just remove everything
         print_warning "Force mode: removing existing configs without backup"
         local files=(".zshrc" ".tmux.conf" ".vimrc" ".gitconfig" ".p10k.zsh" ".aliases.md" ".tmux.md")
-        
+
         for file in "${files[@]}"; do
             rm -f "$HOME/$file"
         done
@@ -383,7 +418,7 @@ create_symlinks() {
 
     # Create symlinks
     local files=(".zshrc" ".tmux.conf" ".vimrc" ".gitconfig" ".p10k.zsh" ".aliases.md" ".tmux.md")
-    
+
     for file in "${files[@]}"; do
         if [[ -f "$CONFIG_DIR/$file" ]]; then
             print_info "Creating symlink: $file"
@@ -443,7 +478,7 @@ install_tmux_plugins() {
 # Main installation
 main() {
     parse_args "$@"
-    
+
     echo ""
     echo "╔═══════════════════════════════════════════════════════════╗"
     echo "║         Shell Setup Installation Script                  ║"
@@ -498,7 +533,7 @@ main() {
     print_info "  ref       - show aliases and shortcuts"
     print_info "  tmuxref   - show tmux commands"
     echo ""
-    
+
     if [[ "$FORCE_MODE" == false ]]; then
         print_warning "Note: Your old configs were backed up to ~/.dotfiles_backup_*"
     fi
